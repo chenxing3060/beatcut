@@ -1,5 +1,6 @@
 mod beat_detection;
 mod hyperframes;
+mod video_processor;
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -20,8 +21,9 @@ fn get_waveform(file_path: String, max_points: usize) -> Result<beat_detection::
     beat_detection::get_waveform(&file_path, max_points)
 }
 
+/// Render a beat-sync video from images using HyperFrames
 #[tauri::command]
-fn render_video(
+fn render_image_beat_video(
     audio_path: String,
     image_paths: Vec<String>,
     beats: Vec<f64>,
@@ -30,7 +32,6 @@ fn render_video(
 ) -> Result<String, String> {
     let export_dir = state.export_dir.lock().map_err(|e| e.to_string())?;
 
-    // Create a unique project dir for this render
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -38,7 +39,7 @@ fn render_video(
 
     let project_dir = Path::new(&*export_dir).join(format!("render_{}", timestamp));
     let output_path = Path::new(&*export_dir)
-        .join(format!("beatcut_export_{}.mp4", timestamp))
+        .join(format!("beatcut_image_export_{}.mp4", timestamp))
         .to_str()
         .unwrap()
         .to_string();
@@ -53,9 +54,43 @@ fn render_video(
     )
 }
 
+/// Render a beat-sync video from video clips using ffmpeg
+#[tauri::command]
+fn render_video_beat_video(
+    audio_path: String,
+    video_paths: Vec<String>,
+    beats: Vec<f64>,
+    state: State<AppState>,
+) -> Result<String, String> {
+    let export_dir = state.export_dir.lock().map_err(|e| e.to_string())?;
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let output_path = Path::new(&*export_dir)
+        .join(format!("beatcut_video_export_{}.mp4", timestamp))
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    video_processor::render_beat_video(
+        &audio_path,
+        &video_paths,
+        &beats,
+        &output_path,
+    )
+}
+
 #[tauri::command]
 fn check_dependencies() -> serde_json::Value {
     let ffmpeg = std::process::Command::new("ffmpeg")
+        .arg("-version")
+        .output()
+        .is_ok();
+
+    let ffprobe = std::process::Command::new("ffprobe")
         .arg("-version")
         .output()
         .is_ok();
@@ -67,6 +102,7 @@ fn check_dependencies() -> serde_json::Value {
 
     serde_json::json!({
         "ffmpeg": ffmpeg,
+        "ffprobe": ffprobe,
         "hyperframes": hyperframes,
     })
 }
@@ -98,7 +134,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             detect_beats,
             get_waveform,
-            render_video,
+            render_image_beat_video,
+            render_video_beat_video,
             check_dependencies,
         ])
         .run(tauri::generate_context!())

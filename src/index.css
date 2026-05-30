@@ -213,7 +213,9 @@ body {
 }
 
 .media-item .media-icon.audio { background: rgba(48, 209, 88, 0.2); color: var(--green); }
+
 .media-item .media-icon.image { background: var(--accent-subtle); color: var(--accent); }
+.media-item .media-icon.video { background: rgba(255, 214, 10, 0.2); color: var(--yellow); }
 
 .media-item .media-name {
   flex: 1;

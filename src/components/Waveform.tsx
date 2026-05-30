@@ -39,7 +39,7 @@ export default function Waveform({ samples, beats, duration, currentTime = 0 }: 
       ctx.fillStyle = '#2a2a2e';
       ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Import music to see waveform', width / 2, height / 2);
+      ctx.fillText('导入音乐后将显示波形', width / 2, height / 2);
       return;
     }
 
