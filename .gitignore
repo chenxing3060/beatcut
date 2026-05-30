@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Rust build
+src-tauri/target/
+
+# Vite build
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+*.pem
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Generated exports
+BeatCutExports/
