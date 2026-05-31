@@ -2,13 +2,7 @@ import { useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import Waveform from './components/Waveform';
-import type { BeatInfo, WaveformData, AppStatus } from './types';
-
-interface MediaItem {
-  path: string;
-  name: string;
-  type: 'audio' | 'image' | 'video';
-}
+import type { BeatInfo, WaveformData, MediaItem, AppStatus } from './types';
 
 function App() {
   const [status, setStatus] = useState<AppStatus>('idle');
@@ -20,14 +14,50 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  // Download state
+  const [downloadUrl, setDownloadUrl] = useState('');
+  const [isDownloading, setIsDownloading] = useState(false);
+
   const hasVideos = mediaItems.some(m => m.type === 'video');
-const exportMode: 'video' | 'image' = hasVideos ? 'video' : 'image';
+  const exportMode: 'video' | 'image' = hasVideos ? 'video' : 'image';
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   }, []);
 
+  // Shared beat analysis logic
+  const analyzeMusic = useCallback(async (filePath: string) => {
+    setExportPath(null);
+    setBeatInfo(null);
+    setWaveformData(null);
+    setStatus('analyzing');
+
+    try {
+      const deps: any = await invoke('check_dependencies');
+      if (!deps.ffmpeg) {
+        showToast('未找到 ffmpeg，请先安装: brew install ffmpeg', 'error');
+        setStatus('idle');
+        return;
+      }
+
+      const waveform: WaveformData = await invoke('get_waveform', {
+        filePath,
+        maxPoints: 2000,
+      });
+      setWaveformData(waveform);
+
+      const beats: BeatInfo = await invoke('detect_beats', { filePath });
+      setBeatInfo(beats);
+      setStatus('ready');
+      showToast(`检测完成: ${beats.bpm} BPM, ${beats.beats.length} 个节拍`, 'success');
+    } catch (err: any) {
+      showToast(`分析失败: ${err}`, 'error');
+      setStatus('idle');
+    }
+  }, [showToast]);
+
+  // Import music from local file
   const importMusic = useCallback(async () => {
     try {
       const file = await open({
@@ -41,36 +71,30 @@ const exportMode: 'video' | 'image' = hasVideos ? 'video' : 'image';
 
       const name = file.split('/').pop() || file.split('\\').pop() || file;
       setMusicFile({ path: file, name, type: 'audio' });
-      setExportPath(null);
-      setBeatInfo(null);
-      setWaveformData(null);
-      setStatus('analyzing');
-
-      const deps: any = await invoke('check_dependencies');
-      if (!deps.ffmpeg) {
-        showToast('未找到 ffmpeg，请先安装：brew install ffmpeg', 'error');
-        setStatus('idle');
-        return;
-      }
-      if (exportMode === 'image' && !deps.hyperframes) {
-        showToast('未找到 hyperframes，图片卡点模式可能不可用', 'error');
-      }
-
-      const waveform: WaveformData = await invoke('get_waveform', {
-        filePath: file,
-        maxPoints: 2000,
-      });
-      setWaveformData(waveform);
-
-      const beats: BeatInfo = await invoke('detect_beats', { filePath: file });
-      setBeatInfo(beats);
-      setStatus('ready');
-      showToast(`检测完成：${beats.bpm} BPM，${beats.beats.length} 个节拍`, 'success');
+      await analyzeMusic(file);
     } catch (err: any) {
-      showToast(`分析失败: ${err}`, 'error');
-      setStatus('idle');
+      showToast(`导入失败: ${err}`, 'error');
     }
-  }, [showToast, exportMode]);
+  }, [analyzeMusic, showToast]);
+
+  // Download music from URL
+  const downloadMusic = useCallback(async () => {
+    const url = downloadUrl.trim();
+    if (!url) return;
+
+    setIsDownloading(true);
+    try {
+      const filePath: string = await invoke('download_audio', { url });
+      const name = filePath.split('/').pop() || '下载音乐.mp3';
+      setMusicFile({ path: filePath, name, type: 'audio' });
+      setDownloadUrl('');
+      showToast('下载完成，正在分析节拍...', 'success');
+      await analyzeMusic(filePath);
+    } catch (err: any) {
+      showToast(`下载失败: ${err}`, 'error');
+    }
+    setIsDownloading(false);
+  }, [downloadUrl, analyzeMusic, showToast]);
 
   const importImages = useCallback(async () => {
     try {
@@ -82,11 +106,8 @@ const exportMode: 'video' | 'image' = hasVideos ? 'video' : 'image';
         }],
       });
       if (!files || !files.length) return;
-
       const items: MediaItem[] = files.map((f: string) => ({
-        path: f,
-        name: f.split('/').pop() || f.split('\\').pop() || f,
-        type: 'image' as const,
+        path: f, name: f.split('/').pop() || f.split('\\').pop() || f, type: 'image' as const,
       }));
       setMediaItems(prev => [...prev, ...items]);
     } catch (err: any) {
@@ -104,11 +125,8 @@ const exportMode: 'video' | 'image' = hasVideos ? 'video' : 'image';
         }],
       });
       if (!files || !files.length) return;
-
       const items: MediaItem[] = files.map((f: string) => ({
-        path: f,
-        name: f.split('/').pop() || f.split('\\').pop() || f,
-        type: 'video' as const,
+        path: f, name: f.split('/').pop() || f.split('\\').pop() || f, type: 'video' as const,
       }));
       setMediaItems(prev => [...prev, ...items]);
     } catch (err: any) {
@@ -155,7 +173,7 @@ const exportMode: 'video' | 'image' = hasVideos ? 'video' : 'image';
       setProgress(100);
       setExportPath(result);
       setStatus('done');
-      showToast('导出成功！', 'success');
+      showToast('导出成功!', 'success');
     } catch (err: any) {
       showToast(`导出失败: ${err}`, 'error');
       setStatus('ready');
@@ -210,14 +228,43 @@ const exportMode: 'video' | 'image' = hasVideos ? 'video' : 'image';
       <div className="main-content">
         {/* 左侧面板 */}
         <div className="side-panel">
+          {/* 在线下载 */}
           <div className="panel-section">
-            <div className="panel-title">音乐</div>
+            <div className="panel-title">在线音乐</div>
+            <div className="download-row">
+              <input
+                className="download-input"
+                type="text"
+                placeholder="粘贴 YouTube / Bilibili 等链接"
+                value={downloadUrl}
+                onChange={e => setDownloadUrl(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && downloadMusic()}
+                disabled={isDownloading}
+              />
+              <button
+                className="download-btn"
+                onClick={downloadMusic}
+                disabled={isDownloading || !downloadUrl.trim()}
+              >
+                {isDownloading ? '⏳' : '⬇'}
+              </button>
+            </div>
+            <div className="download-hint">
+              支持 YouTube、SoundCloud、Bilibili、Twitter 等
+            </div>
+          </div>
+
+          {/* 本地音乐 */}
+          <div className="panel-section">
+            <div className="panel-title">本地音乐</div>
             {musicFile ? (
               <div className="media-list">
                 <div className="media-item">
                   {mediaIcon('audio')}
                   <span className="media-name">{musicFile.name}</span>
-                  <button className="remove-btn" onClick={() => { setMusicFile(null); setBeatInfo(null); setWaveformData(null); setStatus('idle'); }}>×</button>
+                  <button className="remove-btn"
+                    onClick={() => { setMusicFile(null); setBeatInfo(null); setWaveformData(null); setStatus('idle'); }}
+                  >×</button>
                 </div>
               </div>
             ) : (
@@ -227,11 +274,12 @@ const exportMode: 'video' | 'image' = hasVideos ? 'video' : 'image';
                   <circle cx="6" cy="18" r="3" />
                   <circle cx="18" cy="16" r="3" />
                 </svg>
-                导入音乐
+                导入音乐文件
               </button>
             )}
           </div>
 
+          {/* 素材 */}
           <div className="panel-section">
             <div className="panel-title">素材</div>
             <button className="import-btn" onClick={importImages}>
@@ -261,14 +309,15 @@ const exportMode: 'video' | 'image' = hasVideos ? 'video' : 'image';
               </div>
             ) : (
               <div className="empty-state">
-                添加图片或视频素材，<br />生成节拍卡点视频
+                添加图片或视频素材，生成节拍卡点视频
               </div>
             )}
           </div>
 
           {musicFile && (
             <div className="panel-section">
-              <button className="import-btn" onClick={clearAll} style={{ borderColor: 'transparent', justifyContent: 'center' }}>
+              <button className="import-btn" onClick={clearAll}
+                style={{ borderColor: 'transparent', justifyContent: 'center' }}>
                 清空项目
               </button>
             </div>
@@ -307,7 +356,7 @@ const exportMode: 'video' | 'image' = hasVideos ? 'video' : 'image';
             <div className="waveform-container">
               <div className="waveform-empty">
                 <h2>BeatCut</h2>
-                <p>导入音乐自动检测节拍，添加图片或视频生成卡点视频</p>
+                <p>从在线音乐搜索或导入本地文件开始，添加素材生成卡点视频</p>
               </div>
             </div>
           )}
@@ -323,7 +372,7 @@ const exportMode: 'video' | 'image' = hasVideos ? 'video' : 'image';
                 <div className="progress-fill" style={{ width: `${progress}%` }} />
               </div>
               <div className="progress-text">
-                {status === 'rendering' ? '正在导出...' : '导出完成！'} {progress}%
+                {status === 'rendering' ? '正在导出...' : '导出完成!'} {progress}%
               </div>
             </div>
           )}
@@ -344,21 +393,15 @@ const exportMode: 'video' | 'image' = hasVideos ? 'video' : 'image';
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-            {status === 'rendering'
-              ? '导出中...'
-              : hasVideos
-                ? '导出视频卡点'
-                : '导出图片卡点'
-            }
+            {status === 'rendering' ? '导出中...' :
+             hasVideos ? '导出视频卡点' : '导出图片卡点'}
           </button>
         </div>
       </div>
 
-      {/* Toast 提示 */}
+      {/* Toast */}
       {toast && (
-        <div className={`toast ${toast.type}`}>
-          {toast.message}
-        </div>
+        <div className={`toast ${toast.type}`}>{toast.message}</div>
       )}
     </div>
   );

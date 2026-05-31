@@ -18,7 +18,7 @@ export interface DependencyStatus {
 export interface MediaItem {
   path: string;
   name: string;
-  type: 'audio' | 'image';
+  type: 'audio' | 'image' | 'video';
 }
 
 export type AppStatus = 'idle' | 'analyzing' | 'ready' | 'rendering' | 'done' | 'error';

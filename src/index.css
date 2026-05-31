@@ -464,3 +464,67 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* Download Section */
+.download-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.download-input {
+  flex: 1;
+  padding: 9px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.download-input:focus {
+  border-color: var(--accent);
+}
+
+.download-input::placeholder {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.download-input:disabled {
+  opacity: 0.5;
+}
+
+.download-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.download-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.download-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.download-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
