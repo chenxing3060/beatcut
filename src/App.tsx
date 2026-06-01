@@ -134,6 +134,17 @@ function App() {
     }
   }, [showToast]);
 
+  const pasteFromClipboard = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text && text.length < 500 && text.startsWith('http')) {
+        setDownloadUrl(text);
+      }
+    } catch {
+      // Clipboard API not available
+    }
+  }, []);
+
   const removeMedia = useCallback((index: number) => {
     setMediaItems(prev => prev.filter((_, i) => i !== index));
   }, []);
@@ -235,12 +246,20 @@ function App() {
               <input
                 className="download-input"
                 type="text"
-                placeholder="粘贴 YouTube / Bilibili 等链接"
+                placeholder="粘贴抖音 / TikTok / YouTube 链接"
                 value={downloadUrl}
                 onChange={e => setDownloadUrl(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && downloadMusic()}
                 disabled={isDownloading}
               />
+              <button
+                className="paste-btn"
+                onClick={pasteFromClipboard}
+                disabled={isDownloading}
+                title="从剪贴板粘贴"
+              >
+                📋
+              </button>
               <button
                 className="download-btn"
                 onClick={downloadMusic}
@@ -250,7 +269,7 @@ function App() {
               </button>
             </div>
             <div className="download-hint">
-              支持 YouTube、SoundCloud、Bilibili、Twitter 等
+              支持 <strong>抖音 (Douyin)</strong>、<strong>TikTok</strong>、YouTube、Bilibili、SoundCloud 等
             </div>
           </div>
 
