@@ -216,7 +216,7 @@ function App() {
       <div className="titlebar">
         <div className="titlebar-left">
           <span className="titlebar-logo">BEATCUT</span>
-          <span className="titlebar-version">v0.1.0</span>
+          <span className="titlebar-version">v0.2.0</span>
         </div>
         <div className="titlebar-right">
           <span className={`status-dot ${status}`} />
